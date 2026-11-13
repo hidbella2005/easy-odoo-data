@@ -1,0 +1,2 @@
+"""Easy Odoo Data package."""
+
