@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from functools import lru_cache
 from pathlib import Path
 from typing import Any, Protocol
 
@@ -43,7 +44,7 @@ def extract_file(
         if suffix == ".csv":
             frame = pd.read_csv(source)
             return _with_source(frame, source)
-        if suffix in {".xlsx", ".xls"}:
+        if suffix in TABULAR_SUFFIXES - {".csv"}:
             frame = pd.read_excel(source, sheet_name=sheet_name)
             return _with_source(frame, source)
         if suffix in IMAGE_SUFFIXES:
@@ -93,7 +94,9 @@ def _extract_ocr(source: Path, ocr_reader: OCRReader | None) -> pd.DataFrame:
     )
 
 
+@lru_cache(maxsize=1)
 def _create_ocr_reader() -> OCRReader:
+    """Create the OCR model once per process; model startup is expensive."""
     try:
         import easyocr
     except ImportError as exc:
