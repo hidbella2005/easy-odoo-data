@@ -79,7 +79,15 @@ class OdooClient:
             raise OdooError(f"Odoo {model}.{method} request failed: {exc}") from exc
 
     def fields_get(
-        self, model: str, attributes: Iterable[str] = ("string", "type", "required", "relation")
+        self,
+        model: str,
+        attributes: Iterable[str] = (
+            "string",
+            "type",
+            "required",
+            "relation",
+            "readonly",
+        ),
     ) -> dict[str, dict[str, Any]]:
         """Return field metadata for a model, including relational targets."""
         if not model.strip():

@@ -42,4 +42,6 @@ The UI guides users through four visible steps:
 
 PostgreSQL queries are wrapped in a row limit for safe previews. Tool connections
 accept JSON arrays or objects (including `data`, `results`, or `items` envelopes).
+The direct Odoo import maps writable scalar fields; relational fields such as
+many2one and one2many are hidden until dedicated lookup support is available.
 

@@ -6,7 +6,7 @@ from PIL import Image
 
 from app.extractor import ExtractionError, extract_file
 from app.data_cleaner import clean_dataframe
-from app.importer import prepare_import_values
+from app.importer import importable_fields, prepare_import_values
 from app.source_connectors import fetch_tool_json
 
 
@@ -98,4 +98,14 @@ def test_prepare_import_values_converts_missing_and_numpy_values():
     result = prepare_import_values(source, {"name": "name", "age": "age"})
 
     assert result == [{"name": "Ada", "age": 36}, {"name": False, "age": 37}]
+
+
+def test_importable_fields_excludes_readonly_and_relational_fields():
+    fields = {
+        "name": {"type": "char", "readonly": False},
+        "message_follower_ids": {"type": "one2many", "readonly": False},
+        "create_uid": {"type": "many2one", "readonly": True},
+    }
+
+    assert list(importable_fields(fields)) == ["name"]
 

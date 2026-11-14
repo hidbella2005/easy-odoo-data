@@ -13,7 +13,7 @@ from dotenv import load_dotenv
 
 from app.extractor import ExtractionError, extract_file
 from app.data_cleaner import clean_dataframe
-from app.importer import prepare_import_values
+from app.importer import importable_fields, prepare_import_values
 from app.odoo_client import OdooClient, OdooConfig, OdooError
 from app.source_connectors import SourceConnectionError, fetch_tool_json, query_postgres
 
@@ -309,7 +309,13 @@ def _mapping_panel(frame: pd.DataFrame) -> None:
     if not st.session_state.connected:
         st.caption("Connect to Odoo to load live target fields. You can still review source data.")
         return
-    fields = st.session_state.odoo_fields
+    all_fields = st.session_state.odoo_fields
+    fields = importable_fields(all_fields)
+    if len(fields) != len(all_fields):
+        st.caption(
+            f"{len(all_fields) - len(fields):,} read-only or relational fields hidden "
+            "because they require a dedicated lookup."
+        )
     if not fields:
         st.info("Load the target model fields to create mappings.")
         return

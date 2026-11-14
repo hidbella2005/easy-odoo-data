@@ -7,6 +7,31 @@ from typing import Any
 
 import pandas as pd
 
+IMPORTABLE_FIELD_TYPES = {
+    "boolean",
+    "char",
+    "date",
+    "datetime",
+    "float",
+    "html",
+    "integer",
+    "monetary",
+    "selection",
+    "text",
+}
+
+
+def importable_fields(
+    fields: dict[str, dict[str, Any]],
+) -> dict[str, dict[str, Any]]:
+    """Keep writable scalar Odoo fields suitable for direct column mapping."""
+    return {
+        name: metadata
+        for name, metadata in fields.items()
+        if not metadata.get("readonly")
+        and metadata.get("type") in IMPORTABLE_FIELD_TYPES
+    }
+
 
 def prepare_import_values(
     frame: pd.DataFrame, mapping: dict[str, str]
