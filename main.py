@@ -11,6 +11,7 @@ import streamlit as st
 
 from app.extractor import ExtractionError, extract_file
 from app.odoo_client import OdooClient, OdooConfig, OdooError
+from app.source_connectors import SourceConnectionError, fetch_tool_json, query_postgres
 
 
 st.set_page_config(page_title="Easy Odoo Data", page_icon="↔", layout="wide")
@@ -25,6 +26,8 @@ def _init_state() -> None:
         "source_name": None,
         "upload_key": None,
         "temp_path": None,
+        "source_kind": "File upload",
+        "source_status": {"File upload": False, "PostgreSQL warehouse": False, "Tool connection": False},
     }
     for key, value in defaults.items():
         st.session_state.setdefault(key, value)
@@ -52,7 +55,7 @@ def _connection_panel() -> None:
         database = st.text_input("Database")
         username = st.text_input("Username")
         password = st.text_input("Password", type="password")
-        if st.button("Connect", type="primary", use_container_width=True):
+        if st.button("Connect", type="primary", width="stretch"):
             if not all(value.strip() for value in (url, database, username, password)):
                 st.error("Fill in all Odoo connection fields.")
             else:
@@ -69,8 +72,87 @@ def _connection_panel() -> None:
             st.success("Odoo connection active")
 
 
+def _connection_overview() -> None:
+    st.subheader("Connection overview")
+    statuses = st.session_state.source_status
+    cards = st.columns(3)
+    connections = (
+        ("Odoo", st.session_state.connected, "XML-RPC target"),
+        ("PostgreSQL warehouse", statuses["PostgreSQL warehouse"], "SQL source"),
+        ("Tool connection", statuses["Tool connection"], "JSON source"),
+    )
+    for card, (name, active, detail) in zip(cards, connections):
+        with card:
+            with st.container(border=True):
+                st.metric(name, "Connected" if active else "Not connected")
+                st.caption(detail)
+
+
+def _postgres_panel() -> None:
+    st.subheader("PostgreSQL warehouse")
+    with st.form("postgres_source"):
+        host = st.text_input("Host", placeholder="warehouse.example.com")
+        port = st.number_input("Port", min_value=1, max_value=65535, value=5432)
+        database = st.text_input("Database")
+        username = st.text_input("Username")
+        password = st.text_input("Password", type="password")
+        query = st.text_area("Read-only SQL query", value="SELECT * FROM public.my_table")
+        submitted = st.form_submit_button("Query warehouse", type="primary")
+    if submitted:
+        if not all(value.strip() for value in (host, database, username, password, query)):
+            st.error("Fill in all PostgreSQL connection fields.")
+            return
+        try:
+            frame = query_postgres(host, int(port), database, username, password, query)
+            st.session_state.data = frame
+            st.session_state.source_name = f"PostgreSQL: {database}"
+            st.session_state.source_status["PostgreSQL warehouse"] = True
+            st.success(f"Loaded {len(frame):,} rows from PostgreSQL.")
+        except (SourceConnectionError, ValueError) as exc:
+            st.session_state.source_status["PostgreSQL warehouse"] = False
+            st.error(str(exc))
+
+
+def _tool_panel() -> None:
+    st.subheader("Tool connection")
+    st.caption("Connect to a tool that returns JSON records, such as an internal API or automation step.")
+    with st.form("tool_source"):
+        url = st.text_input("Tool URL", placeholder="https://tool.example.com/data")
+        api_key = st.text_input("Bearer token (optional)", type="password")
+        submitted = st.form_submit_button("Connect tool", type="primary")
+    if submitted:
+        try:
+            frame = fetch_tool_json(url, api_key)
+            st.session_state.data = frame
+            st.session_state.source_name = f"Tool: {url}"
+            st.session_state.source_status["Tool connection"] = True
+            st.success(f"Loaded {len(frame):,} rows from tool response.")
+        except (SourceConnectionError, ValueError) as exc:
+            st.session_state.source_status["Tool connection"] = False
+            st.error(str(exc))
+
+
 def _upload_panel() -> None:
-    st.header("2. Upload and preview")
+    st.header("2. Choose a source")
+    source_kind = st.segmented_control(
+        "Source type",
+        ["File upload", "PostgreSQL warehouse", "Tool connection"],
+        default=st.session_state.source_kind,
+        key="source_kind_selector",
+    )
+    if source_kind is None:
+        source_kind = "File upload"
+    st.session_state.source_kind = source_kind
+    if source_kind == "PostgreSQL warehouse":
+        _postgres_panel()
+        _connection_overview()
+        return
+    if source_kind == "Tool connection":
+        _tool_panel()
+        _connection_overview()
+        return
+
+    st.subheader("File upload")
     uploaded_file = st.file_uploader(
         "Choose a CSV, Excel file, image, or PDF",
         type=["csv", "xlsx", "xls", "jpg", "jpeg", "png", "bmp", "tif", "tiff", "pdf"],
@@ -80,7 +162,8 @@ def _upload_panel() -> None:
         return
 
     st.session_state.source_name = uploaded_file.name
-    if st.button("Extract data", type="primary", use_container_width=False):
+    st.session_state.source_status["File upload"] = True
+    if st.button("Extract data", type="primary", width="content"):
         try:
             frame = extract_file(_save_upload(uploaded_file))
             st.session_state.data = frame
@@ -93,7 +176,7 @@ def _upload_panel() -> None:
         st.subheader(f"Preview: {uploaded_file.name}")
         edited = st.data_editor(
             frame.head(100),
-            use_container_width=True,
+            width="stretch",
             hide_index=True,
             key="source_preview",
         )
@@ -107,10 +190,12 @@ def _upload_panel() -> None:
             file_name=f"{Path(uploaded_file.name).stem}-preview.csv",
             mime="text/csv",
         )
+    _connection_overview()
 
 
 def _visualization_panel(frame: pd.DataFrame) -> None:
     st.header("3. Data quality and visualisation")
+    st.caption(f"Source: {st.session_state.source_name or 'current source'}")
     row_count, column_count = frame.shape
     missing_count = int(frame.isna().sum().sum())
     metric_columns = st.columns(3)
@@ -122,7 +207,7 @@ def _visualization_panel(frame: pd.DataFrame) -> None:
     with left:
         st.subheader("Missing values by column")
         missing = frame.isna().sum().sort_values(ascending=False)
-        st.bar_chart(missing[missing > 0], height=260)
+        st.bar_chart(missing[missing > 0], height=260, alt="Missing values by source column")
         if missing.sum() == 0:
             st.success("No missing values detected.")
     with right:
@@ -132,7 +217,11 @@ def _visualization_panel(frame: pd.DataFrame) -> None:
             st.info("No numeric columns available for a chart.")
         else:
             selected = st.selectbox("Numeric column", list(numeric.columns))
-            st.line_chart(numeric[selected].reset_index(drop=True), height=260)
+            st.line_chart(
+                numeric[selected].reset_index(drop=True),
+                height=260,
+                alt=f"Distribution of {selected}",
+            )
 
     st.subheader("Column profile")
     profile = pd.DataFrame(
@@ -143,7 +232,7 @@ def _visualization_panel(frame: pd.DataFrame) -> None:
             "Unique": [int(frame[column].nunique(dropna=True)) for column in frame.columns],
         }
     )
-    st.dataframe(profile, use_container_width=True, hide_index=True)
+    st.dataframe(profile, width="stretch", hide_index=True, alt="Source column profile")
 
 
 def _mapping_panel(frame: pd.DataFrame) -> None:
@@ -174,7 +263,7 @@ def _mapping_panel(frame: pd.DataFrame) -> None:
         if selected != "(skip)":
             mapping_rows.append({"Odoo field": field_name, "Source column": selected})
     if mapping_rows:
-        st.dataframe(pd.DataFrame(mapping_rows), use_container_width=True, hide_index=True)
+        st.dataframe(pd.DataFrame(mapping_rows), width="stretch", hide_index=True, alt="Odoo field mappings")
 
 
 def main() -> None:
@@ -191,6 +280,11 @@ def main() -> None:
         st.session_state.data = None
         st.session_state.source_name = None
         st.session_state.odoo_fields = {}
+        st.session_state.source_status = {
+            "File upload": False,
+            "PostgreSQL warehouse": False,
+            "Tool connection": False,
+        }
         st.rerun()
 
 

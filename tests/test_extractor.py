@@ -4,6 +4,7 @@ import pandas as pd
 from PIL import Image
 
 from app.extractor import ExtractionError, extract_file
+from app.source_connectors import fetch_tool_json
 
 
 class FakeReader:
@@ -43,4 +44,23 @@ def test_extract_rejects_unknown_suffix(tmp_path: Path):
         assert "Unsupported file type" in str(exc)
     else:
         raise AssertionError("Expected unsupported file type error")
+
+
+def test_fetch_tool_json_normalizes_data_envelope(monkeypatch):
+    class FakeResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc_value, traceback):
+            return False
+
+        def read(self):
+            return b'{"data": [{"name": "Ada", "score": 10}]}'
+
+    monkeypatch.setattr("urllib.request.urlopen", lambda request, timeout: FakeResponse())
+
+    result = fetch_tool_json("https://tool.example/data")
+
+    assert list(result.columns) == ["name", "score"]
+    assert result.iloc[0].to_dict() == {"name": "Ada", "score": 10}
 
