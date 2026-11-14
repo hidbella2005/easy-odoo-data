@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import hashlib
+import os
 import tempfile
 from pathlib import Path
 
 import pandas as pd
 import streamlit as st
+from dotenv import load_dotenv
 
 from app.extractor import ExtractionError, extract_file
 from app.data_cleaner import clean_dataframe
@@ -16,6 +18,7 @@ from app.source_connectors import SourceConnectionError, fetch_tool_json, query_
 
 
 st.set_page_config(page_title="Easy Odoo Data", page_icon="↔", layout="wide")
+load_dotenv()
 
 
 def _init_state() -> None:
@@ -53,10 +56,20 @@ def _save_upload(uploaded_file) -> Path:
 def _connection_panel() -> None:
     with st.sidebar:
         st.header("1. Connect to Odoo")
-        url = st.text_input("Odoo URL", placeholder="https://odoo.example.com")
-        database = st.text_input("Database")
-        username = st.text_input("Username")
-        password = st.text_input("Password", type="password")
+        url = st.text_input(
+            "Odoo URL",
+            value=os.getenv("ODOO_URL", ""),
+            placeholder="https://odoo.example.com",
+        )
+        database = st.text_input("Database", value=os.getenv("ODOO_DATABASE", ""))
+        username = st.text_input("Username", value=os.getenv("ODOO_USERNAME", ""))
+        password = st.text_input(
+            "Password",
+            value=os.getenv("ODOO_PASSWORD", ""),
+            type="password",
+        )
+        if not all(value.strip() for value in (url, database, username, password)):
+            st.caption("Set ODOO_URL, ODOO_DATABASE, ODOO_USERNAME, and ODOO_PASSWORD in .env.")
         if st.button("Connect", type="primary", width="stretch"):
             if not all(value.strip() for value in (url, database, username, password)):
                 st.error("Fill in all Odoo connection fields.")

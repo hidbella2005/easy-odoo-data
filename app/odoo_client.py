@@ -36,7 +36,10 @@ class OdooClient:
 
     def __init__(self, config: OdooConfig) -> None:
         self.config = config
-        base_url = config.url.rstrip("/") + "/"
+        base_url = config.url.rstrip("/")
+        if base_url.lower().endswith("/odoo"):
+            base_url = base_url[:-5].rstrip("/")
+        base_url += "/"
         transport = _TimeoutTransport(config.timeout)
         self._common = xmlrpc.client.ServerProxy(
             urljoin(base_url, "xmlrpc/2/common"), transport=transport, allow_none=True

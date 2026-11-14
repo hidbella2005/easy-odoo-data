@@ -23,6 +23,14 @@ streamlit run main.py
 
 OCR dependencies are loaded only when an image or PDF is extracted. Keep Odoo credentials in `.env`, never in source control.
 
+To prefill the Odoo connection form locally, copy the example and edit it:
+
+```powershell
+Copy-Item .env.example .env
+```
+
+Docker loads the same `.env` file through `docker-compose.yml`.
+
 The UI guides users through four visible steps:
 
 1. Connect to Odoo.
