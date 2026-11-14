@@ -21,6 +21,13 @@ from app.source_connectors import SourceConnectionError, fetch_tool_json, query_
 st.set_page_config(page_title="Easy Odoo Data", page_icon="↔", layout="wide")
 load_dotenv()
 
+DESTINATION_MODELS = {
+    "Contacts": "res.partner",
+    "CRM leads": "crm.lead",
+    "Products": "product.template",
+    "Users": "res.users",
+}
+
 
 def _init_state() -> None:
     defaults = {
@@ -297,7 +304,16 @@ def _preparation_panel(frame: pd.DataFrame) -> pd.DataFrame:
 
 def _mapping_panel(frame: pd.DataFrame) -> None:
     st.header("5. Visual field mapping")
-    model = st.text_input("Target Odoo model", value="res.partner", key="target_model")
+    destination = st.selectbox(
+        "Where should this data go?",
+        [*DESTINATION_MODELS, "Custom model"],
+        key="destination_choice",
+    )
+    if destination == "Custom model":
+        model = st.text_input("Custom Odoo model", value="res.partner", key="target_model")
+    else:
+        model = DESTINATION_MODELS[destination]
+        st.caption(f"Odoo model: `{model}`")
     st.session_state.destination_name = f"Odoo: {model.strip() or 'not set'}"
     if st.button("Load Odoo fields", disabled=not st.session_state.connected):
         try:
