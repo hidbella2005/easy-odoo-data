@@ -10,6 +10,7 @@ import pandas as pd
 import streamlit as st
 
 from app.extractor import ExtractionError, extract_file
+from app.data_cleaner import clean_dataframe
 from app.odoo_client import OdooClient, OdooConfig, OdooError
 from app.source_connectors import SourceConnectionError, fetch_tool_json, query_postgres
 
@@ -214,7 +215,7 @@ def _upload_panel() -> None:
 
 
 def _visualization_panel(frame: pd.DataFrame) -> None:
-    st.header("3. Data quality and visualisation")
+    st.header("4. Data quality and visualisation")
     st.caption(f"Source: {st.session_state.source_name or 'current source'}")
     row_count, column_count = frame.shape
     missing_count = int(frame.isna().sum().sum())
@@ -255,8 +256,33 @@ def _visualization_panel(frame: pd.DataFrame) -> None:
     st.dataframe(profile, width="stretch", hide_index=True, alt="Source column profile")
 
 
+def _preparation_panel(frame: pd.DataFrame) -> pd.DataFrame:
+    st.header("3. Prepare and clean data")
+    st.caption("Apply safe, reversible-in-session transformations before mapping to Odoo.")
+    with st.form("data_cleaning"):
+        trim_text = st.checkbox("Trim whitespace around text values")
+        drop_empty_rows = st.checkbox("Remove completely empty rows")
+        drop_duplicates = st.checkbox("Remove duplicate rows")
+        fill_missing = st.checkbox("Fill missing text values")
+        fill_value = st.text_input("Replacement text", value="Unknown", disabled=not fill_missing)
+        submitted = st.form_submit_button("Apply cleaning", type="primary")
+    if submitted:
+        cleaned = clean_dataframe(
+            frame,
+            trim_text=trim_text,
+            drop_empty_rows=drop_empty_rows,
+            drop_duplicates=drop_duplicates,
+            fill_missing_text=fill_value if fill_missing else None,
+        )
+        removed = len(frame) - len(cleaned)
+        st.session_state.data = cleaned
+        st.success(f"Cleaning applied: {removed:,} rows removed, {len(cleaned.columns):,} columns retained.")
+        return cleaned
+    return frame
+
+
 def _mapping_panel(frame: pd.DataFrame) -> None:
-    st.header("4. Visual field mapping")
+    st.header("5. Visual field mapping")
     model = st.text_input("Target Odoo model", value="res.partner", key="target_model")
     st.session_state.destination_name = f"Odoo: {model.strip() or 'not set'}"
     if st.button("Load Odoo fields", disabled=not st.session_state.connected):
@@ -294,7 +320,7 @@ def main() -> None:
     st.caption("Connect → upload → inspect → map. A clear path from raw files to Odoo.")
     _upload_panel()
     if isinstance(st.session_state.data, pd.DataFrame):
-        frame = st.session_state.data
+        frame = _preparation_panel(st.session_state.data)
         st.header("Source → destination")
         _source_destination_overview()
         _visualization_panel(frame)

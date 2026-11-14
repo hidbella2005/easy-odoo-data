@@ -5,6 +5,7 @@ import numpy as np
 from PIL import Image
 
 from app.extractor import ExtractionError, extract_file
+from app.data_cleaner import clean_dataframe
 from app.source_connectors import fetch_tool_json
 
 
@@ -71,4 +72,21 @@ def test_fetch_tool_json_normalizes_data_envelope(monkeypatch):
 
     assert list(result.columns) == ["name", "score"]
     assert result.iloc[0].to_dict() == {"name": "Ada", "score": 10}
+
+
+def test_clean_dataframe_trims_deduplicates_and_fills_text():
+    source = pd.DataFrame({"name": [" Ada ", " Ada ", None], "score": [1, 1, None]})
+
+    result = clean_dataframe(
+        source,
+        trim_text=True,
+        drop_duplicates=True,
+        fill_missing_text="Unknown",
+    )
+
+    assert result.loc[0, "name"] == "Ada"
+    assert result.loc[0, "score"] == 1
+    assert result.loc[1, "name"] == "Unknown"
+    assert pd.isna(result.loc[1, "score"])
+    assert source.iloc[0]["name"] == " Ada "
 
