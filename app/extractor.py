@@ -69,7 +69,14 @@ def _extract_ocr(source: Path, ocr_reader: OCRReader | None) -> pd.DataFrame:
     rows: list[dict[str, str | int]] = []
     for page_number, image in enumerate(pages, start=1):
         try:
-            detected = reader.readtext(image, detail=0, paragraph=False)
+            import numpy as np
+
+            ocr_input = np.asarray(image.convert("RGB"))
+            detected = reader.readtext(ocr_input, detail=0, paragraph=False)
+        except ImportError as exc:
+            raise ExtractionError(
+                "OCR extraction requires NumPy. Install requirements.txt first."
+            ) from exc
         except Exception as exc:
             LOGGER.exception("OCR failed for %s page %s", source, page_number)
             raise ExtractionError(f"OCR failed for {source.name} page {page_number}: {exc}") from exc
