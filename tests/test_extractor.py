@@ -6,6 +6,7 @@ from PIL import Image
 
 from app.extractor import ExtractionError, extract_file
 from app.data_cleaner import clean_dataframe
+from app.importer import prepare_import_values
 from app.source_connectors import fetch_tool_json
 
 
@@ -89,4 +90,12 @@ def test_clean_dataframe_trims_deduplicates_and_fills_text():
     assert result.loc[1, "name"] == "Unknown"
     assert pd.isna(result.loc[1, "score"])
     assert source.iloc[0]["name"] == " Ada "
+
+
+def test_prepare_import_values_converts_missing_and_numpy_values():
+    source = pd.DataFrame({"name": ["Ada", None], "age": [36, 37]})
+
+    result = prepare_import_values(source, {"name": "name", "age": "age"})
+
+    assert result == [{"name": "Ada", "age": 36}, {"name": False, "age": 37}]
 

@@ -13,6 +13,7 @@ from dotenv import load_dotenv
 
 from app.extractor import ExtractionError, extract_file
 from app.data_cleaner import clean_dataframe
+from app.importer import prepare_import_values
 from app.odoo_client import OdooClient, OdooConfig, OdooError
 from app.source_connectors import SourceConnectionError, fetch_tool_json, query_postgres
 
@@ -324,6 +325,16 @@ def _mapping_panel(frame: pd.DataFrame) -> None:
             mapping_rows.append({"Odoo field": field_name, "Source column": selected})
     if mapping_rows:
         st.dataframe(pd.DataFrame(mapping_rows), width="stretch", hide_index=True, alt="Odoo field mappings")
+    mapping = {row["Odoo field"]: row["Source column"] for row in mapping_rows}
+    if st.button("Import prepared data to Odoo", type="primary", disabled=not mapping):
+        try:
+            values = prepare_import_values(frame, mapping)
+            imported_ids = st.session_state.odoo_client.create_batch(model.strip(), values)
+            st.success(f"Imported {len(imported_ids):,} records into {model}.")
+        except (OdooError, ValueError, TypeError) as exc:
+            st.error(f"Odoo import failed: {exc}")
+    elif not mapping:
+        st.caption("Map at least one source column to show the Odoo import button.")
 
 
 def main() -> None:

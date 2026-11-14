@@ -38,6 +38,7 @@ The UI guides users through four visible steps:
 3. Prepare data by trimming text, removing empty or duplicate rows, and filling missing text values.
 4. Review connection status, row counts, missing values, numeric distributions, and column profiles.
 5. Load a target Odoo model and map source columns to its fields.
+6. Import the prepared mapped rows to Odoo in one batch.
 
 PostgreSQL queries are wrapped in a row limit for safe previews. Tool connections
 accept JSON arrays or objects (including `data`, `results`, or `items` envelopes).
