@@ -28,6 +28,7 @@ def _init_state() -> None:
         "temp_path": None,
         "source_kind": "File upload",
         "source_status": {"File upload": False, "PostgreSQL warehouse": False, "Tool connection": False},
+        "destination_name": "Odoo: res.partner",
     }
     for key, value in defaults.items():
         st.session_state.setdefault(key, value)
@@ -86,6 +87,25 @@ def _connection_overview() -> None:
             with st.container(border=True):
                 st.metric(name, "Connected" if active else "Not connected")
                 st.caption(detail)
+
+
+def _source_destination_overview() -> None:
+    """Show the active import route from source data to the Odoo destination."""
+    source_name = st.session_state.source_name or "No source selected"
+    destination_name = st.session_state.destination_name
+    source_card, arrow_card, destination_card = st.columns([5, 1, 5])
+    with source_card:
+        with st.container(border=True):
+            st.caption("Source")
+            st.subheader(source_name)
+            st.caption(f"{st.session_state.source_kind} data")
+    with arrow_card:
+        st.markdown("### →")
+    with destination_card:
+        with st.container(border=True):
+            st.caption("Destination")
+            st.subheader(destination_name)
+            st.caption("Odoo target model")
 
 
 def _postgres_panel() -> None:
@@ -238,6 +258,7 @@ def _visualization_panel(frame: pd.DataFrame) -> None:
 def _mapping_panel(frame: pd.DataFrame) -> None:
     st.header("4. Visual field mapping")
     model = st.text_input("Target Odoo model", value="res.partner", key="target_model")
+    st.session_state.destination_name = f"Odoo: {model.strip() or 'not set'}"
     if st.button("Load Odoo fields", disabled=not st.session_state.connected):
         try:
             client: OdooClient = st.session_state.odoo_client
@@ -274,6 +295,8 @@ def main() -> None:
     _upload_panel()
     if isinstance(st.session_state.data, pd.DataFrame):
         frame = st.session_state.data
+        st.header("Source → destination")
+        _source_destination_overview()
         _visualization_panel(frame)
         _mapping_panel(frame)
     if st.button("Reset current import"):
@@ -285,6 +308,7 @@ def main() -> None:
             "PostgreSQL warehouse": False,
             "Tool connection": False,
         }
+        st.session_state.destination_name = "Odoo: res.partner"
         st.rerun()
 
 
